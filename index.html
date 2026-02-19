@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ramadan Pro Dashboard - Advanced Sunni Edition</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:Poppins;}
+body{
+background:#0d1117;
+color:white;
+text-align:center;
+padding:15px;
+}
+.card{
+background:#161b22;
+padding:15px;
+margin:12px 0;
+border-radius:15px;
+box-shadow:0 0 15px rgba(0,255,150,0.1);
+}
+h1{color:#00ff95;margin-bottom:10px;}
+button{
+padding:8px 14px;
+margin:6px;
+border:none;
+border-radius:8px;
+background:#00ff95;
+color:black;
+font-weight:bold;
+cursor:pointer;
+}
+button:hover{opacity:0.8;}
+.timer{
+font-size:22px;
+margin-top:10px;
+color:#00ff95;
+}
+.progress{
+background:#333;
+height:10px;
+border-radius:5px;
+overflow:hidden;
+margin-top:8px;
+}
+.progress-bar{
+height:10px;
+background:#00ff95;
+width:0%;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🕌 Ramadan Pro Dashboard</h1>
+
+<div class="card">
+<h3>📍 Location</h3>
+<p id="location">Detecting...</p>
+</div>
+
+<div class="card">
+<h3>🗓 Islamic Date</h3>
+<p id="hijriDate">Loading...</p>
+</div>
+
+<div class="card">
+<h3>🕋 Prayer Times</h3>
+<p id="prayerTimes">Loading...</p>
+<button onclick="toggleMadhab()">Switch Hanafi/Shafi</button>
+</div>
+
+<div class="card">
+<h3>⏳ Next Salah Countdown</h3>
+<p class="timer" id="countdown">Calculating...</p>
+</div>
+
+<div class="card">
+<h3>📿 Tasbeeh Counter</h3>
+<h2 id="tasbeehCount">0</h2>
+<button onclick="addTasbeeh()">+1</button>
+<button onclick="resetTasbeeh()">Reset</button>
+</div>
+
+<div class="card">
+<h3>🧭 Qibla Direction</h3>
+<p id="qibla">Calculating...</p>
+</div>
+
+<script>
+let madhab = "hanafi";
+let prayerData = null;
+let userLat = 0;
+let userLon = 0;
+
+if(localStorage.getItem("tasbeeh")){
+document.getElementById("tasbeehCount").innerText = localStorage.getItem("tasbeeh");
+}
+
+function addTasbeeh(){
+let count = parseInt(document.getElementById("tasbeehCount").innerText);
+count++;
+document.getElementById("tasbeehCount").innerText = count;
+localStorage.setItem("tasbeeh", count);
+}
+
+function resetTasbeeh(){
+document.getElementById("tasbeehCount").innerText = 0;
+localStorage.setItem("tasbeeh", 0);
+}
+
+function toggleMadhab(){
+madhab = madhab === "hanafi" ? "shafi" : "hanafi";
+fetchPrayerTimes();
+}
+
+function fetchPrayerTimes(){
+let method = 2; 
+let school = madhab === "hanafi" ? 1 : 0;
+
+fetch(`https://api.aladhan.com/v1/timings?latitude=${userLat}&longitude=${userLon}&method=${method}&school=${school}`)
+.then(res=>res.json())
+.then(data=>{
+prayerData = data.data.timings;
+let hijri = data.data.date.hijri;
+document.getElementById("hijriDate").innerText = hijri.day + " " + hijri.month.en + " " + hijri.year;
+displayPrayerTimes();
+startCountdown();
+});
+}
+
+function displayPrayerTimes(){
+let t = prayerData;
+document.getElementById("prayerTimes").innerHTML = `
+Fajr: ${t.Fajr}<br>
+Dhuhr: ${t.Dhuhr}<br>
+Asr: ${t.Asr}<br>
+Maghrib: ${t.Maghrib}<br>
+Isha: ${t.Isha}
+`;
+}
+
+function startCountdown(){
+setInterval(()=>{
+let now = new Date();
+let times = ["Fajr","Dhuhr","Asr","Maghrib","Isha"];
+for(let name of times){
+let [h,m] = prayerData[name].split(":");
+let prayerTime = new Date();
+prayerTime.setHours(h,m,0);
+if(prayerTime > now){
+let diff = prayerTime - now;
+let hrs = Math.floor(diff/1000/60/60);
+let mins = Math.floor((diff/1000/60)%60);
+let secs = Math.floor((diff/1000)%60);
+document.getElementById("countdown").innerText = `${name} in ${hrs}h ${mins}m ${secs}s`;
+return;
+}
+}
+},1000);
+}
+
+function calculateQibla(){
+let kaabaLat = 21.4225;
+let kaabaLon = 39.8262;
+
+let dLon = (kaabaLon - userLon) * Math.PI/180;
+let lat1 = userLat * Math.PI/180;
+let lat2 = kaabaLat * Math.PI/180;
+
+let y = Math.sin(dLon) * Math.cos(lat2);
+let x = Math.cos(lat1)*Math.sin(lat2) -
+Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+
+let brng = Math.atan2(y,x) * 180/Math.PI;
+brng = (brng + 360) % 360;
+
+document.getElementById("qibla").innerText = "Direction: " + brng.toFixed(2) + "° from North";
+}
+
+navigator.geolocation.getCurrentPosition(position=>{
+userLat = position.coords.latitude;
+userLon = position.coords.longitude;
+document.getElementById("location").innerText = userLat.toFixed(2)+", "+userLon.toFixed(2);
+fetchPrayerTimes();
+calculateQibla();
+});
+</script>
+
+</body>
+  </html>
